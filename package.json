@@ -1,0 +1,15 @@
+{
+  "name": "nightcode",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:cli": "bun run --watch packages/cli/src/index.tsx"
+  },
+  "dependencies": {
+    "@opentui/core": "0.5.10",
+    "@opentui/core-win32-x64": "0.5.10"
+  }
+}
