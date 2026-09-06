@@ -12,7 +12,7 @@ import { useDialog } from "../providers/dialog";
 import { useTheme } from "../providers/theme";
 
 type Props = {
-  onSubmit: (text: String) => void;
+  onSubmit: (text: string) => void;
   disabled?: boolean;
 };
 
@@ -145,7 +145,7 @@ export function InputBar({ onSubmit, disabled = false }: Props) {
           paddingY={1}
           backgroundColor={colors.surface}
           width="100%"
-          minWidth="80%"
+          minWidth="100%"
           gap={1}
         >
           {showCommandMenu && (
