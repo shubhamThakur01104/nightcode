@@ -3,7 +3,7 @@
     "compilerOptions":{
         "paths":{
             "@nightcode/shared":["../shared/src/index.ts"],
-            "@nightcode/database":["../database/src/index.ts"]
+            "@nightcode/database":["../database/src/index.ts"],
         }
     }
 }
