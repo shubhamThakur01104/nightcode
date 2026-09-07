@@ -2,6 +2,11 @@
   "extends":"../../tsconfig.base.json",
 "compilerOptions": {
   "jsx": "react-jsx",
-  "jsxImportSource": "@opentui/react"
+  "jsxImportSource": "@opentui/react",
+  "paths":{
+              "@nightcode/shared":["../shared/src/index.ts"],
+              "@nightcode/server":["../server/src/index.ts"]
+  }
+
 }
 }
