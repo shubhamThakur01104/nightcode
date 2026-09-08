@@ -3,7 +3,7 @@ export type ModelPricing = {
   outputUsdPerMillionTokens: number;
 };
 
-export type SupportedProvider = "anthropic" | "openai";
+export type SupportedProvider = "groq" | "gemini" | "openrouter";
 
 type SupportedChatModelDefinition = {
   id: string;
@@ -12,57 +12,57 @@ type SupportedChatModelDefinition = {
 };
 
 export const SUPPORTED_CHAT_MODELS = [
+
   {
-    id: "claude-sonnet-4-6",
-    provider: "anthropic",
+    id: "qwen/qwen3.6-27b",
+    provider: "groq",
     pricing: {
-      inputUsdPerMillionTokens: 3,
-      outputUsdPerMillionTokens: 15,
+      inputUsdPerMillionTokens: 0.59,
+      outputUsdPerMillionTokens: 0.79,
+    },
+  },
+  {
+    id: "llama-3.1-8b-instant",
+    provider: "groq",
+    pricing: {
+      inputUsdPerMillionTokens: 0.05,
+      outputUsdPerMillionTokens: 0.08,
     },
   },
 
+  // ✨ Gemini Models (Google AI Studio)
   {
-    id: "claude-haiku-4-5",
-    provider: "anthropic",
+    id: "gemini-3.8-flash",
+    provider: "gemini",
     pricing: {
-      inputUsdPerMillionTokens: 1,
-      outputUsdPerMillionTokens: 5,
+      inputUsdPerMillionTokens: 0.075,
+      outputUsdPerMillionTokens: 0.3,
+    },
+  },
+  {
+    id: "gemini-3.5-flash-lite",
+    provider: "gemini",
+    pricing: {
+      inputUsdPerMillionTokens: 1.25,
+      outputUsdPerMillionTokens: 5.0,
     },
   },
 
+  // 🌐 OpenRouter Models (Aggregator / Free tiers)
   {
-    id: "claud-opus-4-6",
-    provider: "anthropic",
+    id: "deepseek/deepseek-chat",
+    provider: "openrouter",
     pricing: {
-      inputUsdPerMillionTokens: 5,
-      outputUsdPerMillionTokens: 25,
+      inputUsdPerMillionTokens: 0.14,
+      outputUsdPerMillionTokens: 0.28,
     },
   },
-
   {
-    id: "gpt-5-4",
-    provider: "openai",
+    id: "qwen/qwen-2.5-coder-32b-instruct:free",
+    provider: "openrouter",
     pricing: {
-      inputUsdPerMillionTokens: 2.5,
-      outputUsdPerMillionTokens: 15,
-    },
-  },
-
-  {
-    id: "gpt-5.4-mini",
-    provider: "openai",
-    pricing: {
-      inputUsdPerMillionTokens: 0.75,
-      outputUsdPerMillionTokens: 4.5,
-    },
-  },
-
-  {
-    id: "gpt-5.4-nano",
-    provider: "openai",
-    pricing: {
-      inputUsdPerMillionTokens: 0.2,
-      outputUsdPerMillionTokens: 1.25,
+      inputUsdPerMillionTokens: 0,
+      outputUsdPerMillionTokens: 0,
     },
   },
 ] as const satisfies readonly SupportedChatModelDefinition[];
@@ -75,4 +75,4 @@ export function findSupportedChatModel(modelId: string) {
   return SUPPORTED_CHAT_MODELS.find((model) => model.id === modelId);
 }
 
-export const DEFAULT_CHAT_MODEL_ID: SupportedChatModelId = "claud-opus-4-6";
+export const DEFAULT_CHAT_MODEL_ID: SupportedChatModelId = "gemini-3.5-flash-lite";
