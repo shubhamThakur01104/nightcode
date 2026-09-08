@@ -12,10 +12,11 @@
   },
   "dependencies": {
     "@ai-sdk/groq": "^4.0.37",
-    "@ai-sdk/openai": "^4.0.60",
+    "@ai-sdk/google": "^4.0.60",
     "@hono/zod-validator": "^0.9.1",
     "@nightcode/database": "workspace:*",
     "@nightcode/shared": "workspace:*",
+    "@openrouter/ai-sdk-provider": "^3.0.0",
     "@sentry/bun": "^10.73.0",
     "@sentry/hono": "^10.73.0",
     "ai": "^7.0.93",
