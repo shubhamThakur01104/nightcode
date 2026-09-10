@@ -65,5 +65,5 @@ export default {
   port: Number(process.env.PORT) || 3000,
   hostname: "0.0.0.0",
   fetch: app.fetch,
-  idleTimeout: 255,
+  idleTimeout: 600,
 };
