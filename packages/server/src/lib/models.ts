@@ -9,9 +9,10 @@ import {
   type SupportedProvider,
 } from "@nightcode/shared";
 
+import type { ProviderOptions } from "@ai-sdk/provider-utils";
+
 import type { LanguageModel } from "ai";
 
-// OpenRouter provider instance initialize karte hain
 const openrouter = createOpenRouter({
   apiKey: process.env.OPENROUTER_API_KEY,
 });
@@ -29,6 +30,57 @@ export type ResolvedModel = {
   model: LanguageModel;
   provider: SupportedProvider;
   modelId: SupportedChatModelId;
+  providerOptions?: ProviderOptions;
+};
+
+const GOOGLE_PROVIDER_OPTIONS: Partial<Record<GeminiModelId, ProviderOptions>> =
+  {
+    "gemini-3.5-flash-lite": {
+      google: {
+        thinkingConfig: {
+          thinkingBudget: 10000,
+          includeThoughts: true,
+        },
+      },
+    },
+    "gemini-3.8-flash": {
+      google: {
+        thinkingConfig: {
+          thinkingBudget: 15000,
+          includeThoughts: true,
+        },
+      },
+    },
+  };
+
+const GROQ_PROVIDER_OPTIONS: Partial<Record<GroqModelId, ProviderOptions>> = {
+  "qwen/qwen3.6-27b": {
+    groq: {
+      reasoningFormat: "parsed",
+      reasoningEffort: "default",
+      serviceTier: "on_demand",
+    },
+  },
+  "llama-3.1-8b-instant": {
+    groq: {
+      structuredOutputs: true,
+    },
+  },
+};
+
+const OPENROUTER_PROVIDER_OPTIONS: Partial<
+  Record<OpenRouterModelId, ProviderOptions>
+> = {
+  "deepseek/deepseek-chat": {
+    openrouter: {
+      extraBody: {
+        provider: {
+          order: ["DeepInfra", "Groq"],
+          allow_fallbacks: true,
+        },
+      },
+    },
+  },
 };
 
 function assertUnsupportedProvider(provider: never): never {
@@ -40,6 +92,7 @@ function resolveGroqModel(modelId: GroqModelId): ResolvedModel {
     model: groq(modelId),
     provider: "groq",
     modelId,
+    providerOptions: GROQ_PROVIDER_OPTIONS[modelId],
   };
 }
 
@@ -48,6 +101,7 @@ function resolveGeminiModel(modelId: GeminiModelId): ResolvedModel {
     model: google(modelId),
     provider: "gemini",
     modelId,
+    providerOptions: GOOGLE_PROVIDER_OPTIONS[modelId],
   };
 }
 
@@ -56,6 +110,7 @@ function resolveOpenRouterModel(modelId: OpenRouterModelId): ResolvedModel {
     model: openrouter(modelId),
     provider: "openrouter",
     modelId,
+    providerOptions: OPENROUTER_PROVIDER_OPTIONS[modelId],
   };
 }
 
