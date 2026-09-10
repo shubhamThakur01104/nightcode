@@ -2,10 +2,11 @@ import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import chat from "./routes/chat";
 import * as Sentry from "@sentry/hono/bun";
-
+import auth from "./routes/auth";
 import { sentry } from "@sentry/hono/bun";
 
 import sessions from "./routes/sessions";
+import { requireAuth } from "./middleware/require-auth";
 
 const app = new Hono();
 
@@ -57,7 +58,13 @@ app.onError((error, c) => {
   return c.json({ error: "Internal server error" }, 500);
 });
 
-const routes = app.route("/sessions", sessions).route("/chat", chat);
+app.use("/sessions/*", requireAuth);
+app.use("/chat/*", requireAuth);
+
+const routes = app
+  .route("/auth", auth)
+  .route("/sessions", sessions)
+  .route("/chat", chat);
 
 export type AppType = typeof routes;
 // idleTimeout must be high, otherwise LLM tool calls might not complete
@@ -65,5 +72,5 @@ export default {
   port: Number(process.env.PORT) || 3000,
   hostname: "0.0.0.0",
   fetch: app.fetch,
-  idleTimeout: 600,
+  idleTimeout: 255,
 };

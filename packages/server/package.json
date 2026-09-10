@@ -12,8 +12,9 @@
     "start": "bun ./src/index.ts"
   },
   "dependencies": {
-    "@ai-sdk/groq": "^4.0.37",
     "@ai-sdk/google": "^4.0.60",
+    "@ai-sdk/groq": "^4.0.37",
+    "@clerk/backend": "^3.17.2",
     "@hono/zod-validator": "^0.9.1",
     "@nightcode/database": "workspace:*",
     "@nightcode/shared": "workspace:*",
@@ -23,6 +24,7 @@
     "ai": "^7.0.93",
     "dotenv": "^17.4.2",
     "hono": "^4.13.7",
+    "open": "^11.0.2",
     "zod": "^4.5.4"
   }
 }
