@@ -3,6 +3,7 @@ import { HTTPException } from "hono/http-exception";
 import chat from "./routes/chat";
 import * as Sentry from "@sentry/hono/bun";
 import auth from "./routes/auth";
+import billing from "./routes/billing";
 import { sentry } from "@sentry/hono/bun";
 
 import sessions from "./routes/sessions";
@@ -60,11 +61,14 @@ app.onError((error, c) => {
 
 app.use("/sessions/*", requireAuth);
 app.use("/chat/*", requireAuth);
+app.use("/billing/checkout", requireAuth);
+app.use("/billing/portal", requireAuth);
 
 const routes = app
   .route("/auth", auth)
   .route("/sessions", sessions)
-  .route("/chat", chat);
+  .route("/chat", chat)
+  .route("/billing", billing);
 
 export type AppType = typeof routes;
 // idleTimeout must be high, otherwise LLM tool calls might not complete
