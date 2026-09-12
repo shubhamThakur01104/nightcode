@@ -12,7 +12,6 @@ type SupportedChatModelDefinition = {
 };
 
 export const SUPPORTED_CHAT_MODELS = [
-
   {
     id: "qwen/qwen3.6-27b",
     provider: "groq",
@@ -22,7 +21,7 @@ export const SUPPORTED_CHAT_MODELS = [
     },
   },
   {
-    id: "llama-3.1-8b-instant",
+    id: "openai/gpt-oss-120b",
     provider: "groq",
     pricing: {
       inputUsdPerMillionTokens: 0.05,
@@ -50,15 +49,15 @@ export const SUPPORTED_CHAT_MODELS = [
 
   // 🌐 OpenRouter Models (Aggregator / Free tiers)
   {
-    id: "deepseek/deepseek-chat",
+    id: "cohere/north-mini-code:free",
     provider: "openrouter",
     pricing: {
-      inputUsdPerMillionTokens: 0.14,
-      outputUsdPerMillionTokens: 0.28,
+      inputUsdPerMillionTokens: 0.0,
+      outputUsdPerMillionTokens: 0.0,
     },
   },
   {
-    id: "qwen/qwen-2.5-coder-32b-instruct:free",
+    id: "poolside/laguna-xs-2.1:free",
     provider: "openrouter",
     pricing: {
       inputUsdPerMillionTokens: 0,
@@ -75,4 +74,5 @@ export function findSupportedChatModel(modelId: string) {
   return SUPPORTED_CHAT_MODELS.find((model) => model.id === modelId);
 }
 
-export const DEFAULT_CHAT_MODEL_ID: SupportedChatModelId = "gemini-3.5-flash-lite";
+export const DEFAULT_CHAT_MODEL_ID: SupportedChatModelId =
+  "gemini-3.5-flash-lite";

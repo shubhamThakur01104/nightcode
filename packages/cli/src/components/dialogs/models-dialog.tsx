@@ -1,10 +1,10 @@
 import { useCallback } from "react";
 import { useDialog } from "../../providers/dialog";
 import { DialogSearchList } from "../dialog-search-box";
-import { Mode } from "@nightcode/database";
+import { Mode, type ModeType } from "@nightcode/shared";
 import type { SupportedChatModelId } from "@nightcode/shared";
 
-const AVAILABLE_MODES: Mode[] = [Mode.BUILD, Mode.PLAN];
+const AVAILABLE_MODES: ModeType[] = [Mode.BUILD, Mode.PLAN];
 
 type ModelsDialogContentProps = {
   models: SupportedChatModelId[];

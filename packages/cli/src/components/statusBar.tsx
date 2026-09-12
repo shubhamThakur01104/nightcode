@@ -1,7 +1,7 @@
 import { TextAttributes } from "@opentui/core";
 import { useTheme } from "../providers/theme";
 import { usePromptConfig } from "../providers/prompt-config";
-import { Mode } from "@nightcode/database";
+import { Mode } from "@nightcode/shared";
 
 const StatusBar = () => {
   const { mode, model } = usePromptConfig();
