@@ -19,7 +19,6 @@ export function getPolarProductId() {
 }
 
 export function getPolarCreditsMeterId() {
-  console.log(getRequiredEnv("PORAL_CREDITS_METER_ID"))
   return getRequiredEnv("PORAL_CREDITS_METER_ID");
 }
 

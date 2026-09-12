@@ -23,7 +23,7 @@ import { useDialog } from "../providers/dialog";
 import { useTheme } from "../providers/theme";
 import { useNavigate } from "react-router";
 import { usePromptConfig } from "../providers/prompt-config";
-import { Mode } from "@nightcode/database";
+import { Mode } from "@nightcode/shared";
 
 const MAX_VISIBLE_MENTIONS = 8;
 const CURRENT_DIRECTORY = process.cwd();

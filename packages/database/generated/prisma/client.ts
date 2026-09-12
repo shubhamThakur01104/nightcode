@@ -46,8 +46,3 @@ export { Prisma }
  * 
  */
 export type Session = Prisma.SessionModel
-/**
- * Model Message
- * 
- */
-export type Message = Prisma.MessageModel

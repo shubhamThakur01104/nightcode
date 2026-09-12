@@ -22,8 +22,3 @@ export * from './enums.js';
  * 
  */
 export type Session = Prisma.SessionModel
-/**
- * Model Message
- * 
- */
-export type Message = Prisma.MessageModel

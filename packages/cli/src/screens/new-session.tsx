@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { z } from "zod";
-import { Mode } from "@nightcode/database";
+import { Mode, modeSchema } from "@nightcode/shared";
 import { useNavigate, useLocation } from "react-router";
 import { useTheme } from "../providers/theme";
 import { SessionShell } from "../components/session-shell";
@@ -12,7 +12,7 @@ import { getErrorMessage } from "../lib/http-error";
 
 const newSessionStateSchema = z.object({
   message: z.string(),
-  mode: z.enum(Mode),
+  mode: modeSchema,
   model: z.string(),
 });
 
@@ -48,13 +48,6 @@ export function NewSession() {
         const res = await apiClient.sessions.$post({
           json: {
             title: state.message.slice(0, 100),
-            cwd: process.cwd(),
-            initialMessage: {
-              role: "USER",
-              content: state.message,
-              mode: state.mode,
-              model: state.model,
-            },
           },
         });
 
@@ -68,6 +61,7 @@ export function NewSession() {
           replace: true,
           state: {
             session,
+            initialPrompt: state,
           },
         });
       } catch (error) {
