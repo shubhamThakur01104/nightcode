@@ -61,27 +61,11 @@ const GROQ_PROVIDER_OPTIONS: Partial<Record<GroqModelId, ProviderOptions>> = {
       serviceTier: "on_demand",
     },
   },
-  "llama-3.1-8b-instant": {
-    groq: {
-      structuredOutputs: true,
-    },
-  },
 };
 
 const OPENROUTER_PROVIDER_OPTIONS: Partial<
   Record<OpenRouterModelId, ProviderOptions>
-> = {
-  "deepseek/deepseek-chat": {
-    openrouter: {
-      extraBody: {
-        provider: {
-          order: ["DeepInfra", "Groq"],
-          allow_fallbacks: true,
-        },
-      },
-    },
-  },
-};
+> = {};
 
 function assertUnsupportedProvider(provider: never): never {
   throw new Error(`Unsupported provider: ${provider}`);
