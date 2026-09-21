@@ -1,6 +1,7 @@
 import { google } from "@ai-sdk/google";
 import { groq } from "@ai-sdk/groq";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
+import { createOpenAI } from "@ai-sdk/openai";
 
 import {
   findSupportedChatModel,
@@ -17,6 +18,14 @@ const openrouter = createOpenRouter({
   apiKey: process.env.OPENROUTER_API_KEY,
 });
 
+const omnirouter = createOpenAI({
+  apiKey: process.env.OMNIROUTER_API_KEY || process.env.OMNIROUTE_API_KEY,
+  baseURL:
+    process.env.OMNIROUTER_BASE_URL ||
+    process.env.OMNIROUTE_BASE_URL ||
+    "https://api.omnirouter.ai/v1",
+});
+
 type GroqModelId = Extract<SupportedChatModel, { provider: "groq" }>["id"];
 
 type GeminiModelId = Extract<SupportedChatModel, { provider: "gemini" }>["id"];
@@ -24,6 +33,11 @@ type GeminiModelId = Extract<SupportedChatModel, { provider: "gemini" }>["id"];
 type OpenRouterModelId = Extract<
   SupportedChatModel,
   { provider: "openrouter" }
+>["id"];
+
+type OmnirouterModelId = Extract<
+  SupportedChatModel,
+  { provider: "omnirouter" }
 >["id"];
 
 export type ResolvedModel = {
@@ -67,6 +81,10 @@ const OPENROUTER_PROVIDER_OPTIONS: Partial<
   Record<OpenRouterModelId, ProviderOptions>
 > = {};
 
+const OMNIROUTER_PROVIDER_OPTIONS: Partial<
+  Record<OmnirouterModelId, ProviderOptions>
+> = {};
+
 function assertUnsupportedProvider(provider: never): never {
   throw new Error(`Unsupported provider: ${provider}`);
 }
@@ -98,6 +116,15 @@ function resolveOpenRouterModel(modelId: OpenRouterModelId): ResolvedModel {
   };
 }
 
+function resolveOmnirouterModel(modelId: OmnirouterModelId): ResolvedModel {
+  return {
+    model: omnirouter.chat(modelId),
+    provider: "omnirouter",
+    modelId,
+    providerOptions: OMNIROUTER_PROVIDER_OPTIONS[modelId],
+  };
+}
+
 function resolveSupportedChatModel(model: SupportedChatModel): ResolvedModel {
   const provider = model.provider;
 
@@ -108,6 +135,8 @@ function resolveSupportedChatModel(model: SupportedChatModel): ResolvedModel {
       return resolveGeminiModel(model.id);
     case "openrouter":
       return resolveOpenRouterModel(model.id);
+    case "omnirouter":
+      return resolveOmnirouterModel(model.id);
     default:
       return assertUnsupportedProvider(provider);
   }

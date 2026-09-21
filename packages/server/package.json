@@ -14,6 +14,7 @@
   "dependencies": {
     "@ai-sdk/google": "^4.0.60",
     "@ai-sdk/groq": "^4.0.37",
+    "@ai-sdk/openai": "^4.0.71",
     "@clerk/backend": "^3.17.2",
     "@hono/zod-validator": "^0.9.1",
     "@nightcode/database": "workspace:*",

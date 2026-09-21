@@ -18,6 +18,17 @@ function resolveInsideCwd(path: string) {
   if (rel.startsWith("..") || isAbsolute(rel)) {
     throw new Error("Path is outside the project directory");
   }
+
+  const normalizedRel = rel.replace(/\\/g, "/");
+  const filename = normalizedRel.split("/").pop() || "";
+  if (
+    filename.startsWith(".env") ||
+    normalizedRel.includes("/.env") ||
+    normalizedRel === ".env"
+  ) {
+    throw new Error("Access to .env files is forbidden");
+  }
+
   return { cwd, resolved };
 }
 
@@ -58,7 +69,12 @@ export async function executeLocalTool(
       const entries = await readdir(resolved);
       const results: { name: string; type: "file" | "directory" }[] = [];
       for (const entry of entries) {
-        if (entry.startsWith(".") || entry === "node_modules") continue;
+        if (
+          entry.startsWith(".") ||
+          entry === "node_modules" ||
+          entry.startsWith(".env")
+        )
+          continue;
         const info = await stat(join(resolved, entry));
         results.push({
           name: entry,
@@ -86,7 +102,12 @@ export async function executeLocalTool(
         dot: false,
         onlyFiles: true,
       })) {
-        if (match.includes("node_modules")) continue;
+        if (
+          match.includes("node_modules") ||
+          match.startsWith(".env") ||
+          match.includes("/.env")
+        )
+          continue;
         if (files.length >= MAX_RESULTS) {
           truncated = true;
           break;
@@ -104,6 +125,7 @@ export async function executeLocalTool(
         "--color=never",
         "--exclude-dir=node_modules",
         "--exclude-dir=.git",
+        "--exclude=.env*",
         "-E",
       ];
       if (include) args.push(`--include=${include}`);
@@ -136,8 +158,12 @@ export async function executeLocalTool(
 
         const match = line.match(/^(.+?):(\d+):(.*)$/);
         if (match) {
+          const filePath = relative(cwd, match[1]!);
+          const fileName = filePath.split("/").pop() || "";
+          if (fileName.startsWith(".env")) continue;
+
           matches.push({
-            file: relative(cwd, match[1]!),
+            file: filePath,
             line: Number(match[2]),
             content: match[3]!,
           });
@@ -151,19 +177,19 @@ export async function executeLocalTool(
     }
     case "writeFile": {
       const { path, content } = toolInputSchemas.writeFile.parse(input);
-      const { cwd, resolved } = resolveInsideCwd(path);
+      const { resolved } = resolveInsideCwd(path);
       await mkdir(dirname(resolved), { recursive: true });
       await writeFile(resolved, content, "utf-8");
       return {
         success: true as const,
-        path: relative(cwd, resolved),
+        path: relative(process.cwd(), resolved),
         bytesWritten: Buffer.byteLength(content, "utf-8"),
       };
     }
     case "editFile": {
       const { path, oldString, newString } =
         toolInputSchemas.editFile.parse(input);
-      const { cwd, resolved } = resolveInsideCwd(path);
+      const { resolved } = resolveInsideCwd(path);
       const content = await readFile(resolved, "utf-8");
       const occurrences = content.split(oldString).length - 1;
 
@@ -172,12 +198,25 @@ export async function executeLocalTool(
         throw new Error(`oldString is ambiguous; found ${occurrences} matches`);
 
       await writeFile(resolved, content.replace(oldString, newString), "utf-8");
-      return { success: true as const, path: relative(cwd, resolved) };
+      return { success: true as const, path: relative(process.cwd(), resolved) };
     }
     case "bash": {
       const { command, timeout = DEFAULT_TIMEOUT } =
         toolInputSchemas.bash.parse(input);
-      const proc = Bun.spawn(["bash", "-c", command], {
+
+      // Block attempts to read/cat/grep .env files via bash
+      if (
+        /\b(cat|less|more|head|tail|grep|awk|sed|cp|mv)\s+.*\.env/i.test(
+          command,
+        ) ||
+        /\.env\b/i.test(command)
+      ) {
+        throw new Error(
+          "Access to .env files via bash command is strictly forbidden",
+        );
+      }
+
+    const proc = Bun.spawn(["bash", "-c", command], {
         cwd: resolveInsideCwd(".").resolved,
         stdout: "pipe",
         stderr: "pipe",

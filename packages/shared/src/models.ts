@@ -3,7 +3,7 @@ export type ModelPricing = {
   outputUsdPerMillionTokens: number;
 };
 
-export type SupportedProvider = "groq" | "gemini" | "openrouter";
+export type SupportedProvider = "groq" | "gemini" | "openrouter" | "omnirouter";
 
 type SupportedChatModelDefinition = {
   id: string;
@@ -62,6 +62,16 @@ export const SUPPORTED_CHAT_MODELS = [
     pricing: {
       inputUsdPerMillionTokens: 0,
       outputUsdPerMillionTokens: 0,
+    },
+  },
+
+  // 🧭 Omnirouter Models
+  {
+    id: "auto/coding",
+    provider: "omnirouter",
+    pricing: {
+      inputUsdPerMillionTokens: 0.1,
+      outputUsdPerMillionTokens: 0.3,
     },
   },
 ] as const satisfies readonly SupportedChatModelDefinition[];

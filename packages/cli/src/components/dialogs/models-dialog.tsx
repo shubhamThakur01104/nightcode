@@ -1,17 +1,14 @@
 import { useCallback } from "react";
 import { useDialog } from "../../providers/dialog";
 import { DialogSearchList } from "../dialog-search-box";
-import { Mode, type ModeType } from "@nightcode/shared";
 import type { SupportedChatModelId } from "@nightcode/shared";
-
-const AVAILABLE_MODES: ModeType[] = [Mode.BUILD, Mode.PLAN];
 
 type ModelsDialogContentProps = {
   models: SupportedChatModelId[];
-  onSelectModel: (modeId: SupportedChatModelId) => void;
+  onSelectModel: (modelId: SupportedChatModelId) => void;
 };
 
-export const ModelssDialogContent = ({
+export const ModelsDialogContent = ({
   models,
   onSelectModel,
 }: ModelsDialogContentProps) => {

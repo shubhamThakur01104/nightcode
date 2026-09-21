@@ -10,6 +10,8 @@ function getRequiredEnv(name: string) {
   return value;
 }
 
+
+
 export function getPolarAccessToken() {
   return getRequiredEnv("POLAR_ACCESS_TOKEN");
 }
@@ -19,7 +21,7 @@ export function getPolarProductId() {
 }
 
 export function getPolarCreditsMeterId() {
-  return getRequiredEnv("PORAL_CREDITS_METER_ID");
+  return getRequiredEnv("POLAR_CREDITS_METER_ID");
 }
 
 export function getPolarServer(): PolarServer {

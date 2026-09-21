@@ -35,10 +35,12 @@ function getTokenCounts(usage: LanguageModelUsage): TokenCounts {
     !Number.isFinite(inputTokens) ||
     !Number.isFinite(outputTokens) ||
     !Number.isInteger(inputTokens) ||
-    !Number.isInteger(outputTokens || inputTokens < 0 || outputTokens < 0)
+    !Number.isInteger(outputTokens) ||
+    inputTokens < 0 ||
+    outputTokens < 0
   ) {
     throw new Error(
-      "Credit conversaton requires input and output token counts",
+      "Credit conversion requires input and output token counts",
     );
   }
 

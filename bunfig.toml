@@ -1,2 +1,4 @@
 [install]
 linker = "hoisted"
+link-install-dir = true
+ignoreScripts = true

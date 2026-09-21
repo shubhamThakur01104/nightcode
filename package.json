@@ -7,10 +7,13 @@
   ],
   "scripts": {
     "dev:cli": "bun run --watch packages/cli/src/index.tsx",
-    "dev:server": "bun run --hot packages/server/src/index.ts"
+    "dev:server": "bun run --hot packages/server/src/index.ts",
+    "build:cli": "bun run --filter @nightcode/cli build",
+    "link:cli": "bun run build:cli && cd packages/cli && bun link"
   },
   "dependencies": {
     "@opentui/core": "0.5.10",
-    "@opentui/core-win32-x64": "0.5.10"
+    "@opentui/core-win32-x64": "0.5.10",
+    "dotenv": "^17.4.2"
   }
 }
