@@ -24,7 +24,7 @@ const app = new Hono().get("/callback", (c) => {
       throw new Error("Invalid port in state");
     }
 
-    const redirectUrl = `http://localhost:${port}/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`;
+    const redirectUrl = `${process.env.API_URL}/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`;
 
     return c.redirect(redirectUrl);
   } catch {
