@@ -1,10 +1,12 @@
 import { Hono } from "hono";
 import type { AuthenticatedEnv } from "../middleware/require-auth";
 import { createCheckoutUrl, createCustomerPortalUrl } from "../lib/polar";
+import { invalidateCreditsCache } from "../middleware/require-credits-balance";
 
 const app = new Hono<AuthenticatedEnv>()
   .post("/checkout", async (c) => {
     const userId = c.get("userId");
+    invalidateCreditsCache(userId);
 
     return c.json({
       url: await createCheckoutUrl({
@@ -15,6 +17,8 @@ const app = new Hono<AuthenticatedEnv>()
   })
   .post("/portal", async (c) => {
     const userId = c.get("userId");
+    invalidateCreditsCache(userId);
+
     return c.json({
       url: await createCustomerPortalUrl({
         customerExternalId: userId,

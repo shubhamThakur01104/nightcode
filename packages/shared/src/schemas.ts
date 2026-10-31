@@ -13,6 +13,18 @@ export type ModeType = (typeof Mode)[keyof typeof Mode];
 export const toolInputSchemas = {
   readFile: z.object({
     path: z.string().describe("Relative path to the file to read"),
+    startLine: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe("1-based line number to start reading from"),
+    endLine: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe("1-based line number to end reading at"),
   }),
   listDirectory: z.object({
     path: z.string().default(".").describe("Relative directory path to list"),
@@ -50,7 +62,8 @@ export const toolInputSchemas = {
 
 export const readOnlyToolContracts = {
   readFile: tool({
-    description: "Read a file from the current project directory.",
+    description:
+      "Read a file from the current project directory with optional line range.",
     inputSchema: toolInputSchemas.readFile,
   }),
   listDirectory: tool({

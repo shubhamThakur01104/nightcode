@@ -31,7 +31,35 @@ function isToolPart(part: ClientMessagePart): part is ToolPart {
 function formatToolArgs(tc: ToolPart): string {
   if (!("input" in tc) || tc.input === null) return "";
   if (typeof tc.input !== "object") return String(tc.input);
-  return Object.values(tc.input).map(String).join(" ");
+
+  const inputObj = tc.input as Record<string, unknown>;
+
+  // Prioritize showing command or path summary without huge payloads
+  if ("command" in inputObj) {
+    const cmd = String(inputObj.command);
+    return cmd.length > 80 ? `${cmd.slice(0, 80)}...` : cmd;
+  }
+
+  if ("path" in inputObj) {
+    let summary = String(inputObj.path);
+    if ("startLine" in inputObj && inputObj.startLine != null) {
+      summary += ` :${inputObj.startLine}`;
+      if ("endLine" in inputObj && inputObj.endLine != null) {
+        summary += `-${inputObj.endLine}`;
+      }
+    }
+    return summary;
+  }
+
+  if ("pattern" in inputObj) {
+    return String(inputObj.pattern);
+  }
+
+  const entries = Object.entries(inputObj).filter(
+    ([k]) => k !== "content" && k !== "newString" && k !== "oldString",
+  );
+  const formatted = entries.map(([_, v]) => String(v)).join(" ");
+  return formatted.length > 100 ? `${formatted.slice(0, 100)}...` : formatted;
 }
 
 type PartGroup = {
@@ -105,12 +133,13 @@ export function BotMessage({
                 >
                   <text attributes={TextAttributes.DIM}>
                     <em fg={colors.info}>{formatToolName(toolName)}:</em>
+                    {" "}
                     {formatToolArgs(part)}
                     {part.state !== "output-available" &&
                     part.state !== "output-error"
                       ? " ..."
                       : ""}
-                    {part.state === "output-error" ? `${part.errorText}` : ""}
+                    {part.state === "output-error" ? ` (${part.errorText})` : ""}
                   </text>
                 </box>
               );

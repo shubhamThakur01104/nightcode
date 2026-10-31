@@ -46,16 +46,10 @@ const app = new Hono<AuthenticatedEnv>()
     return c.json(sessions);
   })
   .get("/:id", async (c) => {
-    // MOCK: Uncomment to simulate slow session loading
-    // await new Promise((r) => setTimeout(r, 5000));
-
-    // MOCK: Uncomment to simulate session loading error
-    // throw new HTTPException(500, {
-    //   message: "Mock error: session loading failed",
-    // });
-
     const id = c.req.param("id");
     const userId = c.get("userId");
+    const limitParam = c.req.query("limit");
+    const limit = limitParam ? parseInt(limitParam, 10) : undefined;
 
     const session = await db.session.findUnique({
       where: { id, userId },
@@ -73,19 +67,53 @@ const app = new Hono<AuthenticatedEnv>()
     Sentry.logger.info("Loaded session", {
       sessionId: session.id,
     });
+
+    // Support windowed/limited message loading to reduce payload size on initial CLI screen render
+    if (limit && Array.isArray(session.messages) && session.messages.length > limit) {
+      const allMessages = session.messages as unknown as unknown[];
+      return c.json({
+        ...session,
+        messages: allMessages.slice(-limit),
+        totalMessages: allMessages.length,
+        hasMoreMessages: true,
+      });
+    }
+
     return c.json(session);
   })
+  .get("/:id/messages", async (c) => {
+    const id = c.req.param("id");
+    const userId = c.get("userId");
+    const limit = Math.max(1, Math.min(100, parseInt(c.req.query("limit") || "30", 10)));
+    const beforeParam = c.req.query("before");
+    const before = beforeParam ? parseInt(beforeParam, 10) : undefined;
+
+    const session = await db.session.findUnique({
+      where: { id, userId },
+      select: { messages: true },
+    });
+
+    if (!session) {
+      return c.json({ error: "Session not found" }, 404);
+    }
+
+    const messages = Array.isArray(session.messages)
+      ? (session.messages as unknown as unknown[])
+      : [];
+
+    const endIndex = before !== undefined ? Math.max(0, Math.min(before, messages.length)) : messages.length;
+    const startIndex = Math.max(0, endIndex - limit);
+    const sliced = messages.slice(startIndex, endIndex);
+
+    return c.json({
+      messages: sliced,
+      startIndex,
+      endIndex,
+      totalCount: messages.length,
+      hasMore: startIndex > 0,
+    });
+  })
   .post("/", requireCreditsBalance, createSessionValidator, async (c) => {
-    //MOCK: Uncomment to simulate slow session loading
-
-    // await new Promise((r) => setTimeout(r, 5000));
-
-    //MOCK: Uncomment to simulate session loading error
-    // throw new HTTPException(
-    //   500,
-    //   {message:"Mock error: session loading failed"}
-    // )
-
     const userId = c.get("userId");
     const data = c.req.valid("json");
     const session = await db.session.create({

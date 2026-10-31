@@ -39,6 +39,7 @@ export type AppType = typeof routes;
 | `GET` | `/auth/callback` | No | No | Handles Clerk OAuth redirect, extracts port, and redirects to CLI | Browser redirect target during `performLogin()` |
 | `GET` | `/sessions` | Yes | No | Lists all sessions for the authenticated user | `SessionDialogContent` (`apiClient.sessions.$get()`) |
 | `GET` | `/sessions/:id` | Yes | No | Fetches a single session record with message history | `Session` screen (`apiClient.sessions[":id"].$get()`) |
+| `GET` | `/sessions/:id/messages` | Yes | No | Fetches a paginated slice of message history | `useChat` / CLI lazy loading |
 | `POST` | `/sessions` | Yes | Yes | Creates a new chat session | `NewSession` screen (`apiClient.sessions.$post()`) |
 | `POST` | `/chat` | Yes | Yes | Streams LLM text, reasoning, and tool calls; saves history | `useChat` hook via `DefaultChatTransport` |
 | `POST` | `/billing/checkout` | Yes | No | Generates Polar checkout URL for credit purchases | `openUpgradeCheckout()` (`apiClient.billing.checkout.$post()`) |

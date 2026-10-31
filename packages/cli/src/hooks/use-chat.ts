@@ -61,7 +61,7 @@ export function useChat(sessionId: string, initialMessages: Message[]) {
           body: {
             id: sessionId,
             messages: requestMessages,
-            mode: message.metadata?.mode ?? metadata?.mode,
+            mode: message.metadata?.mode ?? metadata?.mode ?? "BUILD",
             model: message.metadata?.model ?? metadata?.model,
           },
         };
@@ -74,7 +74,9 @@ export function useChat(sessionId: string, initialMessages: Message[]) {
     messages: initialMessages,
     transport,
     onToolCall({ toolCall }) {
-      const mode = chat.messages.at(-1)?.metadata?.mode ?? "BUILD";
+      const mode =
+        chat.messages.findLast((m) => m.metadata?.mode)?.metadata?.mode ??
+        "BUILD";
 
       void executeLocalTool(toolCall.toolName, toolCall.input, mode)
         .then((output) =>

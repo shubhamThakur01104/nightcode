@@ -46,7 +46,7 @@ function ChatMessage({ msg }: { msg: Message }) {
       parts={msg.parts}
       model={msg.metadata?.model ?? "unknown"}
       mode={msg.metadata?.mode ?? "BUILD"}
-      duration={msg.metadata?.durationMs}
+      durationMs={msg.metadata?.durationMs}
       streaming={false}
     />
   );
@@ -82,7 +82,7 @@ function SessionChat({
     };
   }, [abort]);
 
-  // Let the user cancle a reply even before the first streamed chunk arrives.
+  // Let the user cancel a reply even before the first streamed chunk arrives.
   useKeyboard((key) => {
     if (key.name === "escape" && isTopLayer("base") && status === "streaming") {
       key.preventDefault();
@@ -145,6 +145,7 @@ export function Session() {
       try {
         const res = await apiClient.sessions[":id"].$get({
           param: { id },
+          query: { limit: "50" },
         });
         if (ignore) return;
         if (!res.ok) throw new Error(await getErrorMessage(res));
@@ -152,7 +153,7 @@ export function Session() {
         const fetchedSession = await res.json();
         if (ignore) return;
 
-        setSession(fetchedSession); // Data milne par yahan set hoga
+        setSession(fetchedSession);
       } catch (error) {
         if (ignore) return;
         toast.show({

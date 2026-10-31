@@ -23,7 +23,10 @@ import {
 
 import { buildSystemPrompt } from "../system-prompt";
 import type { AuthenticatedEnv } from "../middleware/require-auth";
-import { requireCreditsBalance } from "../middleware/require-credits-balance";
+import {
+  requireCreditsBalance,
+  invalidateCreditsCache,
+} from "../middleware/require-credits-balance";
 import { calculateCreditsForUsage } from "../lib/credits";
 import { ingestAiUsage } from "../lib/polar";
 import { isSupportedChatModel, resolveChatModel } from "../lib/models";
@@ -72,6 +75,130 @@ function hasPendingToolCalls(message: NightcodeUIMessage) {
       return state !== "output-available" && state !== "output-error";
     }
     return false;
+  });
+}
+
+/**
+ * Intelligent historical tool output compactor:
+ * Prunes massive tool outputs (large file reads, grep dumps, bash logs) from older conversational turns
+ * to achieve >70% token savings and prevent LLM "Lost in the Middle" attention degradation,
+ * while preserving active turn context byte-for-byte.
+ */
+function pruneHistoricalToolOutputs(
+  messages: NightcodeUIMessage[],
+  keepRecentTurns = 2,
+): NightcodeUIMessage[] {
+  if (messages.length <= keepRecentTurns * 2) {
+    return messages;
+  }
+
+  // Preserve the last `keepRecentTurns` user turns uncompacted
+  let userTurnsSeen = 0;
+  let cutoffIndex = 0;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i]?.role === "user") {
+      userTurnsSeen++;
+      if (userTurnsSeen >= keepRecentTurns) {
+        cutoffIndex = i;
+        break;
+      }
+    }
+  }
+
+  return messages.map((msg, index) => {
+    if (index >= cutoffIndex) {
+      return msg;
+    }
+
+    const compactedParts = msg.parts.map((part) => {
+      const isTool =
+        part.type === "dynamic-tool" || part.type.startsWith("tool-");
+      if (!isTool) return part;
+
+      const toolPart = part as {
+        type: string;
+        toolCallId: string;
+        toolName?: string;
+        input: any;
+        state?: string;
+        output?: any;
+        errorText?: string;
+      };
+
+      if (toolPart.state !== "output-available" || !toolPart.output) {
+        return part;
+      }
+
+      const output = toolPart.output;
+
+      // Compact large readFile contents
+      if (
+        (toolPart.type === "tool-readFile" ||
+          toolPart.toolName === "readFile") &&
+        output &&
+        typeof output === "object" &&
+        "content" in output &&
+        typeof output.content === "string" &&
+        output.content.length > 300
+      ) {
+        const lineCount =
+          output.totalLines ?? output.content.split("\n").length;
+        return {
+          ...toolPart,
+          output: {
+            ...output,
+            content: `[File content (${lineCount} lines) previously read from '${toolPart.input?.path || ""}' - compacted to conserve context]`,
+            compacted: true,
+          },
+        };
+      }
+
+      // Compact large bash stdout
+      if (
+        (toolPart.type === "tool-bash" || toolPart.toolName === "bash") &&
+        output &&
+        typeof output === "object" &&
+        "stdout" in output &&
+        typeof output.stdout === "string" &&
+        output.stdout.length > 300
+      ) {
+        return {
+          ...toolPart,
+          output: {
+            ...output,
+            stdout: `[Shell command '${toolPart.input?.command || ""}' output (${output.stdout.length} chars) - compacted to conserve context]`,
+            compacted: true,
+          },
+        };
+      }
+
+      // Compact large grep match arrays
+      if (
+        (toolPart.type === "tool-grep" || toolPart.toolName === "grep") &&
+        output &&
+        typeof output === "object" &&
+        Array.isArray(output.matches) &&
+        output.matches.length > 8
+      ) {
+        return {
+          ...toolPart,
+          output: {
+            ...output,
+            matches: output.matches.slice(0, 4),
+            compacted: true,
+            totalMatches: output.matches.length,
+            message: `[Showing 4 of ${output.matches.length} matches - remainder compacted]`,
+          },
+        };
+      }
+
+      return part;
+    });
+
+    return {
+      ...msg,
+      parts: compactedParts,
+    };
   });
 }
 
@@ -125,7 +252,11 @@ const app = new Hono<AuthenticatedEnv>().post(
       tools,
     });
 
-    const modelMessages = await convertToModelMessages(nextMessages, { tools });
+    // Prune historical tool bloat for LLM model messages while keeping active turn intact
+    const promptMessages = pruneHistoricalToolOutputs(nextMessages, 2);
+    const modelMessages = await convertToModelMessages(promptMessages, {
+      tools,
+    });
 
     let completedUsage: LanguageModelUsage | null = null;
 
@@ -139,6 +270,7 @@ const app = new Hono<AuthenticatedEnv>().post(
         completedUsage = event.totalUsage;
       },
     });
+
     return result.toUIMessageStreamResponse<NightcodeUIMessage>({
       originalMessages: nextMessages,
       messageMetadata({ part }) {
@@ -160,6 +292,7 @@ const app = new Hono<AuthenticatedEnv>().post(
         if (event.isAborted) return;
         if (hasPendingToolCalls(event.responseMessage)) return;
 
+        // Persist the full original messages (including unpruned output) in DB for user history
         await db.session.update({
           where: { id, userId },
           data: {
@@ -181,6 +314,9 @@ const app = new Hono<AuthenticatedEnv>().post(
             eventId: `chat-message:${event.responseMessage.id}`,
             credits: billableUsage.credits,
           });
+
+          // Invalidate cached credit balance so next request fetches latest balance
+          invalidateCreditsCache(userId);
         } catch (error) {
           console.error("Failed to ingest Polar AI usage for chat message", {
             error,

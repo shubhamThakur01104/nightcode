@@ -36,7 +36,7 @@ export function buildSystemPrompt({ mode }: SystemPromptParams): string {
     parts.push(`
         ## Tool Usage
         You have these tools available:
-        - **readFile** - Read a file's contents
+        - **readFile** - Read a file's contents (supports optional startLine and endLine for specific sections)
         - **listDirectory** - List entries in a directory
         - **glob** - Find files matching a pattern (e.g. "**/*.ts")
         - **grep** - Search file contents with regex
@@ -52,7 +52,7 @@ export function buildSystemPrompt({ mode }: SystemPromptParams): string {
     parts.push(`
         ##Tool Usage
         You have these tools available:
-        - **readFile** - Read a file's contents
+        - **readFile** - Read a file's contents (supports optional startLine and endLine for specific sections)
         - **writeFile** - Create or overwrite a file
         - **editFile** - Make a targeted string replacement in a file (oldString must be unique)
         - **listDirectory** - List entries in a directory
