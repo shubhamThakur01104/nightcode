@@ -13,6 +13,7 @@ Run Server: `bun run dev:server` | Run CLI: `bun run dev:cli`
 | `docs/04-api-contract.md` | Full HTTP route details, request/response schemas, and SSE streams. | Creating, changing, or calling backend API endpoints. | Writing offline local CLI tools. |
 | `docs/05-coding-standards.md` | Naming rules, code style, error formats, and task checklists. | Writing or refactoring any code file. | Doing non-code architectural review. |
 | `docs/06-constraints-and-non-goals.md` | Security guards, caps, timeouts, non-goals, and hard agent rules. | Planning features or touching local execution tools. | Inspecting existing API types. |
+| `docs/07-codebase-scalability-issues-and-solutions.md` | Large codebase scaling issues, context window pruning, database normalization, and solution code. | Scaling Nightcode for large codebases or long sessions. | Performing minor CSS/color styling changes. |
 
 ### 3. Task Routing
 | If the task is... | Read these, in this order |
@@ -29,6 +30,7 @@ Run Server: `bun run dev:server` | Run CLI: `bun run dev:cli`
 | **Changing theme or UI only** | `docs/01-product-description.md` (§5 Feature 10) → `docs/05-coding-standards.md` (§3 Naming & §6 Style) |
 | **Writing tests** | `docs/05-coding-standards.md` (§10 Testing) → `docs/06-constraints-and-non-goals.md` (§2 Non-Goals) |
 | **Planning a brand-new feature** | `docs/06-constraints-and-non-goals.md` (§2 Non-Goals & §11 Rules) → `docs/01-product-description.md` (§4 Product Overview) |
+| **Optimizing performance / scaling codebase** | `docs/07-codebase-scalability-issues-and-solutions.md` (§2 Audit & §3 Solutions) → `docs/02-technical-architecture.md` |
 
 ### 4. Always-On Rules
 1. **Never access `.env` files**: Local tools and shell execution strictly block reading, writing, or grepping `.env` files [docs/06 §6].
