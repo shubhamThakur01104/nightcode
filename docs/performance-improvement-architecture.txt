@@ -1,0 +1,274 @@
+====================================================================================================
+NIGHTCODE ARCHITECTURAL AUDIT & SCALABILITY REDESIGN SPECIFICATION
+Document: performance-improvement-architecture.txt
+Target Metrics: 5,000 Concurrent Active Users | 100,000 Total User Capacity | Millisecond Latency
+Target AI Metrics: 70%+ Token Cost Reduction | Zero Context Loss | Hallucination-Free Code Generation
+====================================================================================================
+
+----------------------------------------------------------------------------------------------------
+1. EXECUTIVE SUMMARY & SYSTEM OBJECTIVES
+----------------------------------------------------------------------------------------------------
+Nightcode is a terminal-native AI coding assistant consisting of a CLI frontend (@nightcode/cli), 
+a Hono backend gateway (@nightcode/server), a PostgreSQL persistence layer (@nightcode/database), 
+and shared type definitions (@nightcode/shared).
+
+To scale Nightcode from a single-user developer tool to an enterprise-grade AI coding engine capable 
+of supporting 5,000 concurrent active users (and 100,000 total registered accounts) with millisecond 
+API response times and minimal token costs, the project architecture requires a fundamental overhaul.
+
+This document identifies the root architectural bottlenecks in the current implementation, details 
+their impact at scale, and presents a multi-tiered redesign strategy spanning data storage, context 
+window management, AI token optimization, high-concurrency server routing, and anti-hallucination execution.
+
+
+----------------------------------------------------------------------------------------------------
+2. AUDIT OF CURRENT PROBLEMS & BOTTLENECKS
+----------------------------------------------------------------------------------------------------
+
+2.1. DATABASE & DATA STORAGE BOTTLENECK: MONOLITHIC JSON BLOB
+   - Existing Implementation:
+     In `packages/database/prisma/schema.prisma`, all conversation history is stored as a single 
+     unbounded JSON array in `Session.messages`.
+     In `packages/server/src/routes/chat.ts`, every request appends new messages and rewrites the entire 
+     JSON array back to PostgreSQL:
+     `await db.session.update({ where: { id, userId }, data: { messages: event.messages } })`
+
+   - Problems at Scale (5,000 active / 100,000 total users):
+     a) PostgreSQL TOAST Overload & Decompression Overhead:
+        Tool outputs (`readFile` returning thousands of lines, `bash` logs) bloat single session rows 
+        to 10MB+. PostgreSQL moves values exceeding ~2KB to TOAST storage. Every read/write forces 
+        PostgreSQL to decompress and re-serialize the entire multi-megabyte JSON array.
+     b) Massive IOPS & Disk Write Amplification:
+        Saving 1 new message in a 5MB session requires writing 5MB of data to disk. Multiplying 5MB 
+        by 5,000 active streaming users results in 25 GB/sec of database write pressure, causing 
+        disk IOPS starvation, database connection locks, and eventual database crashes.
+     c) Server & CLI Memory Spikes:
+        `GET /sessions/:id` loads the entire history into Node/Bun RAM. A user opening a session 
+        transfers megabytes of JSON over the network, spiking memory usage on both Hono and OpenTUI CLI, 
+        leading to high latency (seconds instead of milliseconds) and out-of-memory (OOM) crashes.
+
+2.2. TOKEN CONSUMPTION & CONTEXT WINDOW EXPLOSION (HIGH COST + HALLUCINATION RISK)
+   - Existing Implementation:
+     In `packages/server/src/routes/chat.ts`, incoming UI messages are merged with all `previousMessages` 
+     from the database and converted directly into LLM format (`convertToModelMessages(nextMessages)`).
+
+   - Problems at Scale:
+     a) Unchecked Context Window Bloat:
+        Every historical file read (`readFile`), regex match (`grep`), directory listing, and bash output 
+        remains in the prompt context indefinitely. A 20-turn coding session accumulates 100,000+ tokens.
+     b) Exorbitant Operational Costs:
+        Re-sending 100,000 tokens per API call for 5,000 active users results in tens of millions of 
+        unnecessary input tokens per minute, leading to massive cloud LLM bills.
+     c) Context Degradation & LLM Hallucinations:
+        When context windows fill with redundant historical file outputs, LLMs suffer from the 
+        "Lost in the Middle" effect. Models hallucinate non-existent APIs, miss recent code changes, 
+        and generate invalid code edits.
+     d) Lack of Codebase Indexing (Brute-Force Context Loading):
+        The AI has no AST (Abstract Syntax Tree) or symbol index. It must read entire files via `readFile` 
+        to discover single function signatures, consuming 10,000 characters for a 5-line lookup.
+
+2.3. SERVER CONCURRENCY & BOTTLENECK IN SYNCHRONOUS EXTERNAL CALLS
+   - Existing Implementation:
+     In `packages/server/src/middleware/require-credits-balance.ts` and `require-auth.ts`, every single 
+     `POST /chat` and `POST /sessions` request triggers synchronous external network calls to:
+     1. Clerk API for OAuth Bearer token verification.
+     2. Polar API for customer credit balance verification.
+
+   - Problems at Scale:
+     a) Synchronous Latency Tax (200ms - 500ms per request):
+        Making remote HTTP calls to Polar and Clerk before serving an API request adds 200ms–500ms of 
+        network latency, making millisecond response times impossible.
+     b) Rate Limit Cascades & Single Point of Failure:
+        5,000 active users sending messages simultaneously will bombard Polar and Clerk with 5,000 req/sec, 
+        triggering third-party rate limits (HTTP 429) or failures (HTTP 503), effectively bringing down 
+        the entire Nightcode application.
+     c) Single Node In-Memory Execution:
+        The server relies on `Bun.serve` in a single process without distributed pub/sub, horizontal 
+        load balancing headers, or request queueing.
+
+2.4. CLI & TERMINAL UI RENDERING BOTTLENECK
+   - Existing Implementation:
+     `packages/cli/src/components/messages/bot-message.tsx` renders all streaming text, reasoning blocks, 
+     and tool execution logs into the OpenTUI frame buffer without virtualization or windowing.
+
+   - Problems at Scale:
+     As message history grows, React component re-renders of large terminal buffers degrade OpenTUI 
+     rendering performance from 60 FPS down to un-usable terminal lag (< 5 FPS), freezing the user's terminal.
+
+
+----------------------------------------------------------------------------------------------------
+3. PROPOSED ARCHITECTURAL REDESIGN & SOLUTIONS
+----------------------------------------------------------------------------------------------------
+
+3.1. STORAGE LAYER REDESIGN: RELATIONAL SCHEMA NORMALIZATION & BLOB CACHING
+   - Normalized Schema Architecture:
+     Refactor PostgreSQL storage into a 3-tier normalized structure (`Session` -> `Message` -> `ToolArtifact`):
+
+     ```prisma
+     model Session {
+       id        String    @id @default(cuid())
+       userId    String
+       title     String
+       mode      String    @default("BUILD") // PLAN | BUILD
+       model     String    @default("gemini-3.5-flash-lite")
+       createdAt DateTime  @default(now())
+       updatedAt DateTime  @updatedAt
+       messages  Message[]
+
+       @@index([userId, updatedAt(sort: Desc)])
+     }
+
+     model Message {
+       id         String         @id @default(cuid())
+       sessionId  String
+       session    Session        @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+       role       String         // "user" | "assistant" | "system"
+       content    String?        @db.Text
+       reasoning  String?        @db.Text
+       metadata   Json?          // { mode, model, durationMs, usage }
+       createdAt  DateTime       @default(now())
+       toolCalls  ToolCall[]
+
+       @@index([sessionId, createdAt(sort: Asc)])
+     }
+
+     model ToolCall {
+       id           String   @id @default(cuid())
+       messageId    String
+       message      Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+       toolCallId   String
+       toolName     String
+       input        Json
+       state        String   // "calling" | "output-available" | "output-error"
+       outputRef    String?  // Hash ID referencing Redis/S3 Object if payload > 2KB
+       inlineOutput Json?    // Trimmed inline summary
+       createdAt    DateTime @default(now())
+
+       @@index([messageId])
+     }
+     ```
+
+   - Hybrid Payload & Blob Offloading:
+     Tool outputs smaller than 2KB are stored in `inlineOutput`. Tool outputs exceeding 2KB (large `readFile` 
+     or `bash` logs) are offloaded to high-performance Object Storage / Redis KV and referenced via `outputRef`.
+   - Cursor-Based Paginated Message Retrieval:
+     `GET /sessions/:id/messages?limit=20&cursor=...` enables the CLI to load only the 20 most recent 
+     messages instantly (< 10ms response time), fetching older turns lazily on scroll up.
+   - Atomic Append Write Operations:
+     Instead of rewriting full session JSON, incoming user prompts and AI responses execute atomic `INSERT` 
+     queries (`db.message.create()`), eliminating write amplification and TOAST locks entirely.
+
+3.2. TOKEN OPTIMIZATION ENGINE & CONTEXT WINDOW MANAGEMENT (LOW TOKEN COST, ZERO HALLUCINATION)
+   To achieve >70% token savings while building complex software without losing context:
+
+   - Sliding Window with Intelligent Tool Output Pruning:
+     Introduce a context pruning pipeline in `POST /chat` before building `modelMessages`:
+     1. Active Turn Preservation: Keep the full detailed outputs for tool calls made in the current and 
+        immediately preceding turn.
+     2. Historical Tool Output Compaction: For tool calls older than 2 turns (e.g., a `readFile` executed 
+        5 turns ago), strip the raw file body and replace it with a lightweight semantic reference marker:
+        `[System Note: File "src/server.ts" (240 lines) was inspected in Turn 3. File content is active in workspace.]`
+        This single technique eliminates 80%+ of historical input tokens without losing model context!
+
+   - AST & Symbol Indexing Layer (Tree-Sitter / Code Graph):
+     Replace brute-force whole-file reads with AST structural awareness:
+     1. Add a local `getWorkspaceSymbols` tool in `@nightcode/cli` using Tree-Sitter to extract class, 
+        interface, and function definitions without loading full file bodies.
+     2. When the AI needs to understand codebase wiring, it fetches file AST skeletons (consuming ~200 tokens) 
+        rather than reading whole source files (consuming ~10,000 tokens).
+
+   - Dynamic System Prompt & Provider-Level Prompt Caching:
+     1. Structure system prompts into static system instructions and dynamic task context.
+     2. Enable Anthropic/OpenAI/Gemini Prompt Caching headers (`ephemeral` cache flags) on static instructions 
+        and codebase symbol maps. Subsequent turns hit model cache, dropping time-to-first-token (TTFT) to < 50ms 
+        and discounting cached prompt token costs by up to 90%.
+
+   - Automated Context Summarization (Developer State Anchor):
+     When cumulative context reaches 15,000 tokens, trigger an asynchronous context compaction step that 
+     compresses past user requirements, file modifications, and current goals into a dense 500-token 
+     "State Summary Anchor". This prevents the "Lost in the Middle" phenomenon and guarantees zero hallucinations.
+
+3.3. HIGH-CONCURRENCY SERVER SCALABILITY FOR 5,000 ACTIVE / 100,000 TOTAL USERS
+   - Edge Gateway & Stateless Hono Cluster:
+     Deploy `@nightcode/server` as stateless nodes behind an API Gateway (NGINX / Cloudflare Workers / AWS ALB) 
+     with round-robin load balancing.
+
+   - Distributed Redis Cache Layer (Auth & Credit Balance):
+     Replace synchronous external HTTP calls with Read-Through/Write-Through Redis caching:
+     1. OAuth Authentication Cache: Verify Clerk tokens and cache user session claims in Redis (TTL: 5 minutes). 
+        Subsequent API requests validate tokens in < 1ms via local Redis lookup.
+     2. Credit Balance Cache: Maintain customer credit balances in Redis KV. `requireCreditsBalance` checks 
+        Redis balance in < 1ms.
+     3. Asynchronous Credit Metering Queue (BullMQ): Usage ingestion events (`ingestAiUsage`) are pushed to a 
+        Background Redis Queue (BullMQ worker process), processing Polar SaaS metering asynchronously without 
+        blocking HTTP response streams.
+
+   - Database Scaling with Connection Pooling & Read Replicas:
+     1. Deploy PgBouncer in transaction pooling mode in front of PostgreSQL to handle up to 10,000 concurrent 
+        client connections without running out of database memory.
+     2. Route all `GET /sessions` and read queries to PostgreSQL Read Replicas, leaving the Primary DB dedicated 
+        strictly to atomic message writes.
+
+3.4. ANTI-HALLUCINATION & COMPLEX CODE GENERATION GUARANTEES
+   - Incremental Syntax & Verification Guards:
+     When in `BUILD` mode, the model must verify edits before declaring completion.
+     1. After `writeFile` or `editFile` operations, automatically run background syntax validation (e.g. `tsc --noEmit` 
+        or AST syntax parser).
+     2. If syntax errors occur, feed the exact compiler error back into the model context immediately for self-correction.
+
+   - Strict File Edit Contracts (`editFile` Guardrails):
+     1. Require `editFile` calls to provide unambiguous `oldString` matching. If `oldString` matches 0 or >1 
+        locations, return exact line number context back to the model rather than failing blindly.
+     2. Maintain a "Workspace Edit Log" tracking modified files per session to keep the LLM synchronized with file state.
+
+3.5. TERMINAL UI & CLI RENDER OPTIMIZATION
+   - OpenTUI Windowed Log Virtualization:
+     Modify `@nightcode/cli` component tree to virtualize terminal viewport message rendering. Render only 
+     the visible terminal screen rows + 10 buffer lines, maintaining smooth 60 FPS terminal UI interaction 
+     regardless of session length.
+
+   - Asynchronous Non-Blocking Tool Pipeline:
+     Execute local tools (`grep`, `glob`, `readFile`, `bash`) using worker threads or asynchronous non-blocking 
+     process streams, preventing terminal input freezes during heavy shell commands.
+
+
+----------------------------------------------------------------------------------------------------
+4. IMPLEMENTATION ROADMAP & PHASED MIGRATION PLAN
+----------------------------------------------------------------------------------------------------
+
+Phase 1: Storage Layer & API Performance (Target: Response time < 50ms)
+  1. Add Prisma migration for normalized `Session`, `Message`, and `ToolCall` tables.
+  2. Implement Redis caching for Clerk Auth validation and Polar Credit check middleware.
+  3. Refactor `POST /sessions` and `GET /sessions/:id/messages` for cursor-based pagination.
+  4. Integrate PgBouncer connection pooling.
+
+Phase 2: Token Optimization Engine (Target: 70%+ token cost reduction)
+  1. Implement historical tool output pruning middleware in `packages/server/src/routes/chat.ts`.
+  2. Add Tree-Sitter AST symbol extractor tool (`getWorkspaceSymbols`) to `@nightcode/cli`.
+  3. Configure provider prompt caching headers for static system instructions.
+  4. Build automated 15,000-token context compaction and state summary generator.
+
+Phase 3: Anti-Hallucination & Execution Safeguards
+  1. Implement post-edit automated syntax checking in `BUILD` mode.
+  2. Add active "Workspace Edit Map" context anchor to model system prompt.
+  3. Implement automated self-correction loop for failed tool/build commands.
+
+Phase 4: TUI Frame Buffer Virtualization
+  1. Implement OpenTUI viewport windowing in `@nightcode/cli/src/components/messages`.
+  2. Optimize async tool execution pipeline to preserve 60 FPS terminal frame rate.
+
+
+----------------------------------------------------------------------------------------------------
+5. EXPECTED METRICS & ARCHITECTURAL COMPARISON
+----------------------------------------------------------------------------------------------------
+
+| Architectural Metric            | Current Architecture                 | Redesigned Architecture               |
+| :------------------------------ | :----------------------------------- | :------------------------------------ |
+| **Max Concurrent Active Users** | ~50 - 100 users (DB/Memory Limit)    | **5,000+ active users**               |
+| **Total Registered Capacity**   | ~1,000 users                         | **100,000+ users**                    |
+| **API Initial Latency (TTFT)**  | 500ms - 2,000ms (Sync SaaS + DB)     | **10ms - 50ms (Redis + Prompt Cache)**|
+| **DB Storage Per Session Turn**  | Full Rewrite (5MB - 20MB DB Write)   | **Atomic Insert (< 2KB DB Write)**    |
+| **Tokens Per Request (Turn 20)**| 100,000+ tokens                      | **< 15,000 tokens (70%-85% reduction)**|
+| **LLM Context Degradation**     | High (Lost in Middle / Hallucination)| **Zero (Pruned + AST Context Anchor)**|
+| **Terminal UI Frame Rate**      | Degrades to < 5 FPS on long sessions | **Constant 60 FPS (Virtualized TUI)** |
+====================================================================================================

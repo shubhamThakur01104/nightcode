@@ -77,7 +77,6 @@ function hasPendingToolCalls(message: NightcodeUIMessage) {
 
 const app = new Hono<AuthenticatedEnv>().post(
   "/",
-  requireCreditsBalance,
   submitValidator,
   async (c) => {
     const userId = c.get("userId");
